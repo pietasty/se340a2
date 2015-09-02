@@ -2,28 +2,93 @@
 import sys
 import os
 import json
+import time
+import hashlib
 
+
+def getFilesInDir(path):
+    return [ f for f in os.listdir(path) if os.path.isfile(os.path.join(path,f)) and not f.startswith('.') and not f.endswith('~')]
+
+def getDirsInDir():
+    return [ d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d)) and not f.startswith('.')]
+
+def makeSyncFile(sync,folder):
+    files = getFilesInDir(folder)
+    data = {}
+    hashing = hashlib.sha256()
+    for doc in files:
+        f = os.path.join(folder,doc)
+        edittime = time.localtime(os.path.getmtime(f))
+        formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", edittime)
+        with open(file1+"/test1.txt",'rb') as output:
+            buf = output.read()
+            hashing.update(buf)
+        data[doc] = (formattime,hashing.hexdigest())
+    with open(sync,'w') as f:
+        json.dump(data,f)
 
 if __name__ == "__main__":
     cwd = os.getcwd()
-    print(str(cwd))    
     #Find them directories baby.
-    file1 = cwd + "/" + sys.argv[1]
-    file2 = cwd + "/" + sys.argv[2]
-    print(file1)
-    print(file2)
+    file1 = os.path.join(cwd,sys.argv[1])
+    file2 = os.path.join(cwd,sys.argv[2])
 
     #Make Directories if they don't exist
     if not os.path.isdir(file1):
         os.makedirs(file1)
     if not os.path.isdir(file2):
         os.makedirs(file2)
+    
+    #Find all the files in the directory
+    folder1 = getFilesInDir(file1)
+    folder2 = getFilesInDir(file2)
 
     #Check for sync files in the directories
-    sync1 = file1 + "/.sync"
-    sync2 = file2 + "/.sync"
+    sync1 = os.path.join(file1,".sync")
+    sync2 = os.path.join(file2,".sync")
+    #Make them if they don't exist
+    if not os.path.isfile(sync1):
+        makeSyncFile(sync1,file1)
+    if not os.path.isfile(sync2):
+        makeSyncFile(sync2,file2)
 
-    if not os.path.isfile(file1):
-        os.makedirs(file1)
-    if not os.path.isfile(file2):
-        os.makedirs(file2)
+    with open(sync1,'r') as f:
+        newdata = json.load(f)
+    print(newdata)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
