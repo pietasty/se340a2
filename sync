@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+
+
+if __name__ == "__main__":
+    cwd = os.getcwd()
+    print(str(cwd))    
+    #Find them directories baby.
+    file1 = cwd + "/" + sys.argv[1]
+    file2 = cwd + "/" + sys.argv[2]
+    print(file1)
+    print(file2)
+
+    #Make Directories if they don't exist
+    if not os.path.isdir(file1):
+        os.makedirs(file1)
+    if not os.path.isdir(file2):
+        os.makedirs(file2)
+
+    #Check for sync files in the directories
+    sync1 = file1 + "/.sync"
+    sync2 = file2 + "/.sync"
+
+    if not os.path.isfile(file1):
+        os.makedirs(file1)
+    if not os.path.isfile(file2):
+        os.makedirs(file2)
