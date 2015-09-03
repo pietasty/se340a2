@@ -6,6 +6,27 @@ import time
 import hashlib
 from shutil import copyfile
 
+
+class Directory:
+    def __init__(self,path):
+        if not os.path.isdir(path):
+            os.makedirs(path)        
+        sync = os.path.join(path,".sync")
+        if not os.path.isfile(sync):
+            makeSyncFile(sync,path)
+        self.files = [ f for f in os.listdir(path) if os.path.isfile(os.path.join(path,f)) and not f.startswith('.') and not f.endswith('~')]
+        self.subDirs = [ d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d)) and not f.startswith('.')]
+        self.sync = sync
+
+    def loadSync(self):
+        with open(sync,'r') as f:
+            data = json.load(f)
+        return data
+
+    def saveSync(self,data):
+        with open(sync,'w') as f:
+            json.dump(data,f)
+
 # Returns a list of files in a directory
 def getFilesInDir(path):
     return [ f for f in os.listdir(path) if os.path.isfile(os.path.join(path,f)) and not f.startswith('.') and not f.endswith('~')]
@@ -23,6 +44,11 @@ def getFileData(file):
         buf = output.read()
         hashing.update(buf)
     return (formattime,hashing.hexdigest())
+
+def updateSyncToDelete(syncinfo):
+    formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", time.localtime())
+    syncinfo.insert(0,(formattime,'deleted'))
+
 
 #Makes a Sync file when it doesn't exist 
 def makeSyncFile(sync,folder):
@@ -67,9 +93,9 @@ def updateSyncFile(sync,folder):
     #Check if a file has been deleted
     for doc in keys:
         if doc not in files and not data[doc][0][1] == 'deleted':
-            formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", time.localtime())
-            data[doc].insert(0,(formattime,'deleted'))
+            updateSyncToDelete(data[doc])
 
+    #Write these changes
     with open(sync,'w') as f:
         json.dump(data,f)
 
@@ -83,30 +109,64 @@ def syncDirectories(sync1,folder1,sync2,folder2):
                 return True
         return False
 
+    #Open the .sync files for analysis 
     with open(sync1,'r') as f:
         data1 = json.load(f)
     with open(sync2,'r') as f:
         data2 = json.load(f)
 
-    #Check for files that don't exist
     keys1 = data1.keys()
     keys2 = data2.keys()
 
     #Start with dir1
     for doc in keys1:   
+        if doc not in keys2 and data1[doc][0][1] == 'deleted':
+            continue
         f1 = os.path.join(folder1,doc)
+        f2 = os.path.join(folder2,doc) 
         # If dir1 has a file that dir2 doesn't
-        if doc not in keys2 and not data1[doc][0][1] == 'deleted':
-            result = getFileData(f1)
+        if doc not in keys2:
+            result1 = getFileData(f1)
             data2[doc] = []
-            data2[doc].append(result)
-            newloc = os.path.join(folder2,doc)
-            copyfile(f1,newloc)
-        #When files have deleted
-        elif data1[doc][0][1] == 'deleted' or data2[doc][0][1] == 'deleted':
-            pass
+            data2[doc].append(result1)
+            copyfile(f1,f2)
+            continue
+
+        #When both dir has deleted
+        if data1[doc][0][1] == 'deleted' and data2[doc][0][1] == 'deleted':
+            continue
+        #When Dir1's file has deleted
+        elif data1[doc][0][1] == 'deleted':
+            #Check to see if Dir2 has remade the file
+            if len(data2[doc]) == 1:
+                os.remove(f2)
+                updateSyncToDelete(data2[doc])
+            elif not data2[doc][0][1] == 'deleted' and data2[doc][1][1] == 'deleted':
+                result2 = getFileData(f2)
+                copyfile(f2,f1)
+                data1[doc].insert(0,result2)
+            else:
+                os.remove(f2)
+                updateSyncToDelete(data2[doc])
+                
+        #When Dir2's file has deleted
+        elif data2[doc][0][1] == 'deleted':
+            #Check to see if Dir1 has remade the file
+            if len(data1[doc]) == 1:
+                os.remove(f1)
+                updateSyncToDelete(data1[doc])                
+            elif not data1[doc][0][1] == 'deleted' and data1[doc][1][1] == 'deleted':
+                result1 = getFileData(f1)
+                copyfile(f1,f2)
+                data2[doc].insert(0,result1)
+            else:
+                os.remove(f1)
+                updateSyncToDelete(data1[doc])
+            
         # When both have details about something
         else:
+            result1 = getFileData(f1)
+            result2 = getFileData(f2)
             onetime = time.strptime(data1[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
             twotime = time.strptime(data2[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
             #If digest is the same 
@@ -117,9 +177,6 @@ def syncDirectories(sync1,folder1,sync2,folder2):
                     data1[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", twotime)
             #When digests are different            
             else:
-                result1 = getFileData(f1)
-                f2 = os.path.join(folder2,doc)
-                result2 = getFileData(f2)
                 #If file in dir1 is superseded
                 if checkIfSuperseded(data1[doc],data2[doc]):
                     data2[doc].insert(0,result1)
@@ -147,11 +204,16 @@ def syncDirectories(sync1,folder1,sync2,folder2):
             newloc = os.path.join(folder1,doc)
             copyfile(f,newloc)
     
+    #Write the changed results to .sync files
     with open(sync1,'w') as f:
         json.dump(data1,f)
     with open(sync2,'w') as f:
         json.dump(data2,f)
             
+#This functions does some dirty work.
+def UpdateSubDirectories:
+    
+
     
 #Main
 if __name__ == "__main__":
