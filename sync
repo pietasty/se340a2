@@ -4,61 +4,184 @@ import os
 import json
 import time
 import hashlib
+from shutil import copyfile
 
-
+# Returns a list of files in a directory
 def getFilesInDir(path):
     return [ f for f in os.listdir(path) if os.path.isfile(os.path.join(path,f)) and not f.startswith('.') and not f.endswith('~')]
 
+# Returns a list of directories in a directory
 def getDirsInDir():
     return [ d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d)) and not f.startswith('.')]
 
+# Return a tuple of modification date and digest of a file
+def getFileData(file):
+    hashing = hashlib.sha256()
+    edittime = time.localtime(os.path.getmtime(file))
+    formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", edittime)
+    with open(file,'rb') as output:
+        buf = output.read()
+        hashing.update(buf)
+    return (formattime,hashing.hexdigest())
+
+#Makes a Sync file when it doesn't exist 
 def makeSyncFile(sync,folder):
     files = getFilesInDir(folder)
     data = {}
-    hashing = hashlib.sha256()
     for doc in files:
         f = os.path.join(folder,doc)
-        edittime = time.localtime(os.path.getmtime(f))
-        formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", edittime)
-        with open(file1+"/test1.txt",'rb') as output:
-            buf = output.read()
-            hashing.update(buf)
-        data[doc] = (formattime,hashing.hexdigest())
+        result = getFileData(f)
+        data[doc] = []
+        data[doc].append(result)
     with open(sync,'w') as f:
         json.dump(data,f)
 
+#Update the Sync file to recent changes
+def updateSyncFile(sync,folder):
+    with open(sync,'r') as f:
+        data = json.load(f)
+    files = getFilesInDir(folder)
+    keys = data.keys()
+    
+    for doc in files:
+        f = os.path.join(folder,doc)
+        result = getFileData(f)
+        #Check to see if new files have been added
+        if doc not in keys:
+            data[doc] = []
+            data[doc].append(result)
+        #Update files to reflect most recent changes
+        else:
+            #If the digest is the same
+            if result[1] == data[doc][0][1]:
+                resulttime = time.strptime(result[0], "%Y-%m-%d %H:%M:%S +1200") 	
+                jsontime = time.strptime(data[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
+                if resulttime > jsontime:
+                    data[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", resulttime)
+                elif jsontime > resulttime:
+                    data[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", jsontime)
+            #If digest is different 
+            else:
+                data[doc].insert(0,result)
+                
+    #Check if a file has been deleted
+    for doc in keys:
+        if doc not in files and not data[doc][0][1] == 'deleted':
+            formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", time.localtime())
+            data[doc].insert(0,(formattime,'deleted'))
+
+    with open(sync,'w') as f:
+        json.dump(data,f)
+
+#Function that syncs the two directories
+def syncDirectories(sync1,folder1,sync2,folder2):
+    #Check if files have been superseded
+    def checkIfSuperseded(list1,list2):
+        first = list1[0][1]
+        for i in range(len(list2)):
+            if first == list2[i][1]:
+                return True
+        return False
+
+    with open(sync1,'r') as f:
+        data1 = json.load(f)
+    with open(sync2,'r') as f:
+        data2 = json.load(f)
+
+    #Check for files that don't exist
+    keys1 = data1.keys()
+    keys2 = data2.keys()
+
+    #Start with dir1
+    for doc in keys1:   
+        f1 = os.path.join(folder1,doc)
+        # If dir1 has a file that dir2 doesn't
+        if doc not in keys2 and not data1[doc][0][1] == 'deleted':
+            result = getFileData(f1)
+            data2[doc] = []
+            data2[doc].append(result)
+            newloc = os.path.join(folder2,doc)
+            copyfile(f1,newloc)
+        #When files have deleted
+        elif data1[doc][0][1] == 'deleted' or data2[doc][0][1] == 'deleted':
+            pass
+        # When both have details about something
+        else:
+            onetime = time.strptime(data1[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
+            twotime = time.strptime(data2[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
+            #If digest is the same 
+            if data1[doc][0][1] == data2[doc][0][1]:
+                if onetime > twotime:
+                    data2[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", onetime)
+                elif twotime > onetime:
+                    data1[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", twotime)
+            #When digests are different            
+            else:
+                result1 = getFileData(f1)
+                f2 = os.path.join(folder2,doc)
+                result2 = getFileData(f2)
+                #If file in dir1 is superseded
+                if checkIfSuperseded(data1[doc],data2[doc]):
+                    data2[doc].insert(0,result1)
+                    copyfile(f1,f2)
+                #If file in dir2 is superseded
+                elif checkIfSuperseded(data2[doc],data1[doc]):
+                    data1[doc].insert(0,result2)
+                    copyfile(f2,f1)
+                #Both versions are gg
+                else:
+                    if onetime > twotime:
+                        data2[doc].insert(0,result1)
+                        copyfile(f1,f2)
+                    elif twotime > onetime:
+                        data1[doc].insert(0,result2)
+                        copyfile(f2,f1)
+
+    #If Dir2 has a file Dir1 doesn't have
+    for doc in keys2:
+        f = os.path.join(folder2,doc)
+        if doc not in keys1 and not data2[doc][0][1] == 'deleted':
+            result = getFileData(f)
+            data1[doc] = []
+            data1[doc].append(result)
+            newloc = os.path.join(folder1,doc)
+            copyfile(f,newloc)
+    
+    with open(sync1,'w') as f:
+        json.dump(data1,f)
+    with open(sync2,'w') as f:
+        json.dump(data2,f)
+            
+    
+#Main
 if __name__ == "__main__":
     cwd = os.getcwd()
     #Find them directories baby.
-    file1 = os.path.join(cwd,sys.argv[1])
-    file2 = os.path.join(cwd,sys.argv[2])
+    dir1 = os.path.join(cwd,sys.argv[1])
+    dir2 = os.path.join(cwd,sys.argv[2])
 
     #Make Directories if they don't exist
-    if not os.path.isdir(file1):
-        os.makedirs(file1)
-    if not os.path.isdir(file2):
-        os.makedirs(file2)
-    
-    #Find all the files in the directory
-    folder1 = getFilesInDir(file1)
-    folder2 = getFilesInDir(file2)
+    if not os.path.isdir(dir1):
+        os.makedirs(dir1)
+    if not os.path.isdir(dir2):
+        os.makedirs(dir2)
 
     #Check for sync files in the directories
-    sync1 = os.path.join(file1,".sync")
-    sync2 = os.path.join(file2,".sync")
+    sync1 = os.path.join(dir1,".sync")
+    sync2 = os.path.join(dir2,".sync")
     #Make them if they don't exist
     if not os.path.isfile(sync1):
-        makeSyncFile(sync1,file1)
+        makeSyncFile(sync1,dir1)
     if not os.path.isfile(sync2):
-        makeSyncFile(sync2,file2)
+        makeSyncFile(sync2,dir2)
 
-    with open(sync1,'r') as f:
-        newdata = json.load(f)
-    print(newdata)
+    #Update them
+    updateSyncFile(sync1,dir1)
+    updateSyncFile(sync2,dir2)
 
-
-
-
+    #Time to Sync some shit baby
+    syncDirectories(sync1,dir1,sync2,dir2)
+    
 
 
 
