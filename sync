@@ -5,6 +5,7 @@ import json
 import time
 import hashlib
 from shutil import copyfile
+from distutils.dir_util import copy_tree
 
 
 class Directory:
@@ -13,16 +14,18 @@ class Directory:
         if not os.path.isdir(path):
             os.makedirs(path)        
         self.files = [ f for f in os.listdir(path) if os.path.isfile(os.path.join(path,f)) and not f.startswith('.') and not f.endswith('~')]
-        self.subDirs = [ d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d)) and not f.startswith('.')]
+        self.subDirs = [ d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d)) and not d.startswith('.')]
         self.sync = os.path.join(path,".sync")
         if not os.path.isfile(self.sync):
             self.makeSyncFile(self.sync,path)
 
+    #Loads the sync file
     def loadSync(self):
         with open(self.sync,'r') as f:
             data = json.load(f)
         return data
 
+    #Saves the sync file
     def saveSync(self,data):
         with open(self.sync,'w') as f:
             json.dump(data,f)
@@ -70,7 +73,13 @@ class Directory:
 
         self.saveSync(data)
 
-
+    # Makes sure all the sync files in the sub directories are up to date
+    def updateSubDirectories(self):
+        for dirs in self.subDirs:
+            fold = os.path.join(self.path,dirs)
+            subDir = Directory(fold)
+            subDir.updateSyncFile()
+            subDir.updateSubDirectories()
 
 
 
@@ -96,29 +105,24 @@ def syncDirectories(dir1,dir2):
     #Check if files have been superseded
     def checkIfSuperseded(list1,list2):
         first = list1[0][1]
-        for i in range(len(list2)):
+        for i in range(1,len(list2)):
             if first == list2[i][1]:
                 return True
-        return False
-
-    folder1 = dir1.path
-    folder2 = dir2.path    
+        return False 
     
     #Open the .sync files for analysis 
     data1 = dir1.loadSync()
     data2 = dir2.loadSync()
 
-    keys1 = data1.keys()
-    keys2 = data2.keys()
-
     #Start with dir1
-    for doc in keys1:   
-        if doc not in keys2 and data1[doc][0][1] == 'deleted':
-            continue
-        f1 = os.path.join(folder1,doc)
-        f2 = os.path.join(folder2,doc) 
+    for doc in data1.keys():   
+        f1 = os.path.join(dir1.path,doc)
+        f2 = os.path.join(dir2.path,doc) 
         # If dir1 has a file that dir2 doesn't
-        if doc not in keys2:
+        if doc not in data2.keys():
+            # If dir1 says that the file is deleted, don't copy info over
+            if data1[doc][0][1] == 'deleted':
+                continue
             result1 = getFileData(f1)
             data2[doc] = []
             data2[doc].append(result1)
@@ -130,10 +134,10 @@ def syncDirectories(dir1,dir2):
             continue
         #When Dir1's file has deleted
         elif data1[doc][0][1] == 'deleted':
-            #Check to see if Dir2 has remade the file
             if len(data2[doc]) == 1:
                 os.remove(f2)
                 updateSyncToDelete(data2[doc])
+            #Check to see if Dir2 has remade the file
             elif not data2[doc][0][1] == 'deleted' and data2[doc][1][1] == 'deleted':
                 result2 = getFileData(f2)
                 copyfile(f2,f1)
@@ -144,10 +148,10 @@ def syncDirectories(dir1,dir2):
                 
         #When Dir2's file has deleted
         elif data2[doc][0][1] == 'deleted':
-            #Check to see if Dir1 has remade the file
             if len(data1[doc]) == 1:
                 os.remove(f1)
-                updateSyncToDelete(data1[doc])                
+                updateSyncToDelete(data1[doc])   
+            #Check to see if Dir2 has remade the file             
             elif not data1[doc][0][1] == 'deleted' and data1[doc][1][1] == 'deleted':
                 result1 = getFileData(f1)
                 copyfile(f1,f2)
@@ -171,11 +175,11 @@ def syncDirectories(dir1,dir2):
             #When digests are different            
             else:
                 #If file in dir1 is superseded
-                if checkIfSuperseded(data1[doc],data2[doc]):
+                if checkIfSuperseded(data2[doc],data1[doc]):
                     data2[doc].insert(0,result1)
                     copyfile(f1,f2)
                 #If file in dir2 is superseded
-                elif checkIfSuperseded(data2[doc],data1[doc]):
+                elif checkIfSuperseded(data1[doc],data2[doc]):
                     data1[doc].insert(0,result2)
                     copyfile(f2,f1)
                 #Both versions are gg
@@ -188,13 +192,13 @@ def syncDirectories(dir1,dir2):
                         copyfile(f2,f1)
 
     #If Dir2 has a file Dir1 doesn't have
-    for doc in keys2:
-        f = os.path.join(folder2,doc)
-        if doc not in keys1 and not data2[doc][0][1] == 'deleted':
+    for doc in data2.keys():
+        f = os.path.join(dir2.path,doc)
+        if doc not in data1.keys() and not data2[doc][0][1] == 'deleted':
             result = getFileData(f)
             data1[doc] = []
             data1[doc].append(result)
-            newloc = os.path.join(folder1,doc)
+            newloc = os.path.join(dir1.path,doc)
             copyfile(f,newloc)
     
     #Write the changed results to .sync files
@@ -202,9 +206,27 @@ def syncDirectories(dir1,dir2):
     dir2.saveSync(data2)
             
 #This functions does some dirty work.
-def UpdateSubDirectories():
-    pass
+def mergeSubDirectories(dir1,dir2):
+    
+    #Start with dir1
+    for dirs in dir1.subDirs:
+        fold1 = os.path.join(dir1.path,dirs)
+        fold2 = os.path.join(dir2.path,dirs)
+        #If dir1 has a subdir that dir2 does not have
+        if dirs not in dir2.subDirs:
+            copy_tree(fold1,fold2)
+        else:
+            subDir1 = Directory(fold1)
+            subDir2 = Directory(fold2)
+            syncDirectories(subDir1,subDir2)
+            mergeSubDirectories(subDir1,subDir2)
 
+    #If dir2 has a subdir that dir1 does not have
+    for dirs in dir2.subDirs:
+        fold1 = os.path.join(dir1.path,dirs)
+        fold2 = os.path.join(dir2.path,dirs)
+        if dirs not in dir1.subDirs:
+            copy_tree(fold2,fold1)    
     
 #Main
 if __name__ == "__main__":
@@ -212,43 +234,16 @@ if __name__ == "__main__":
     dir1 = Directory(sys.argv[1])
     dir2 = Directory(sys.argv[2])
 
-    #Update them
+    #Update sync files
     dir1.updateSyncFile()
     dir2.updateSyncFile()
+
+    #Update sub directories
+    dir1.updateSubDirectories()
+    dir2.updateSubDirectories()
 
     #Time to Sync some shit baby
     syncDirectories(dir1,dir2)
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    #Sync them sub directories
+    mergeSubDirectories(dir1,dir2)
