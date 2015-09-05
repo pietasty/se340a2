@@ -109,6 +109,19 @@ def syncDirectories(dir1,dir2):
             if first == list2[i][1]:
                 return True
         return False 
+
+    def checkDeletion(dic1,dic2,file1,file2):
+        if len(dic2[doc]) == 1:
+            os.remove(file2)
+            updateSyncToDelete(dic2[doc])
+        #Check to see if the other dir has remade the file
+        elif not dic2[doc][0][1] == 'deleted' and dic2[doc][1][1] == 'deleted':
+            result = getFileData(file2)
+            copyfile(file2,file1)
+            dic1[doc].insert(0,result)
+        else:
+            os.remove(file2)
+            updateSyncToDelete(dic2[doc])
     
     #Open the .sync files for analysis 
     data1 = dir1.loadSync()
@@ -134,31 +147,11 @@ def syncDirectories(dir1,dir2):
             continue
         #When Dir1's file has deleted
         elif data1[doc][0][1] == 'deleted':
-            if len(data2[doc]) == 1:
-                os.remove(f2)
-                updateSyncToDelete(data2[doc])
-            #Check to see if Dir2 has remade the file
-            elif not data2[doc][0][1] == 'deleted' and data2[doc][1][1] == 'deleted':
-                result2 = getFileData(f2)
-                copyfile(f2,f1)
-                data1[doc].insert(0,result2)
-            else:
-                os.remove(f2)
-                updateSyncToDelete(data2[doc])
+            checkDeletion(data1,data2,f1,f2)
                 
         #When Dir2's file has deleted
         elif data2[doc][0][1] == 'deleted':
-            if len(data1[doc]) == 1:
-                os.remove(f1)
-                updateSyncToDelete(data1[doc])   
-            #Check to see if Dir2 has remade the file             
-            elif not data1[doc][0][1] == 'deleted' and data1[doc][1][1] == 'deleted':
-                result1 = getFileData(f1)
-                copyfile(f1,f2)
-                data2[doc].insert(0,result1)
-            else:
-                os.remove(f1)
-                updateSyncToDelete(data1[doc])
+            checkDeletion(data2,data1,f2,f1)
             
         # When both have details about something
         else:
