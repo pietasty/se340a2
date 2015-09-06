@@ -56,12 +56,12 @@ class Directory:
             else:
                 #If the digest is the same
                 if result[1] == data[doc][0][1]:
-                    resulttime = time.strptime(result[0], "%Y-%m-%d %H:%M:%S +1200") 	
-                    jsontime = time.strptime(data[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
+                    resulttime = strToTime(result[0])
+                    jsontime = strToTime(data[doc][0][0])
                     if resulttime > jsontime:
-                        data[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", resulttime)
+                        data[doc][0][0] = timeToStr(resulttime)
                     elif jsontime > resulttime:
-                        data[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", jsontime)
+                        data[doc][0][0] = timeToStr(jsontime)
                 #If digest is different 
                 else:
                     data[doc].insert(0,result)
@@ -88,17 +88,27 @@ class Directory:
 def getFileData(file):
     hashing = hashlib.sha256()
     edittime = time.localtime(os.path.getmtime(file))
-    formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", edittime)
+    formattime = timeToStr(edittime)
     with open(file,'rb') as output:
         buf = output.read()
         hashing.update(buf)
     return (formattime,hashing.hexdigest())
 
 ################################################################################
-# Does something useful
+# Updates syns file to delete
 def updateSyncToDelete(syncinfo):
-    formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", time.localtime())
+    formattime = timeToStr(time.localtime())
     syncinfo.insert(0,(formattime,'deleted'))
+
+###############################################################################
+# Converts time into a string
+def timeToStr(t):
+    return time.strftime("%Y-%m-%d %H:%M:%S +1200", t)
+
+###############################################################################
+# Converts string into a time object
+def strToTime(s):
+    return time.strptime(s, "%Y-%m-%d %H:%M:%S +1200")
 
 ##############################################################################
 #Function that syncs the two directories
@@ -118,8 +128,8 @@ def syncDirectories(dir1,dir2):
             updateSyncToDelete(dic2[doc])
         #Check to see if the other dir has remade the file
         elif not dic2[doc][0][1] == 'deleted' and dic2[doc][1][1] == 'deleted':
-            # If the file has been remade but now is deleted            
-            if len(dic1[doc]) > 2 and dic1[doc][2][1] == 'deleted':
+            # If deletion is more recent   
+            if strToTime(dic1[doc][0][0]) > strToTime(dic2[doc][0][0]):
                 os.remove(file2)
                 updateSyncToDelete(dic2[doc])
             else:
@@ -164,14 +174,14 @@ def syncDirectories(dir1,dir2):
         else:
             result1 = getFileData(f1)
             result2 = getFileData(f2)
-            onetime = time.strptime(data1[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
-            twotime = time.strptime(data2[doc][0][0], "%Y-%m-%d %H:%M:%S +1200")
+            onetime = strToTime(data1[doc][0][0])
+            twotime = strToTime(data2[doc][0][0])
             #If digest is the same 
             if data1[doc][0][1] == data2[doc][0][1]:
                 if onetime > twotime:
-                    data2[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", onetime)
+                    data2[doc][0][0] = timeToStr(onetime)
                 elif twotime > onetime:
-                    data1[doc][0][0] = time.strftime("%Y-%m-%d %H:%M:%S +1200", twotime)
+                    data1[doc][0][0] = timeToStr(twotime)
             #When digests are different            
             else:
                 #If file in dir1 is superseded
