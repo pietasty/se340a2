@@ -100,6 +100,7 @@ def updateSyncToDelete(syncinfo):
     formattime = time.strftime("%Y-%m-%d %H:%M:%S +1200", time.localtime())
     syncinfo.insert(0,(formattime,'deleted'))
 
+##############################################################################
 #Function that syncs the two directories
 def syncDirectories(dir1,dir2):
     #Check if files have been superseded
@@ -110,15 +111,21 @@ def syncDirectories(dir1,dir2):
                 return True
         return False 
 
+    #Deals with when a file has been deleted
     def checkDeletion(dic1,dic2,file1,file2):
         if len(dic2[doc]) == 1:
             os.remove(file2)
             updateSyncToDelete(dic2[doc])
         #Check to see if the other dir has remade the file
         elif not dic2[doc][0][1] == 'deleted' and dic2[doc][1][1] == 'deleted':
-            result = getFileData(file2)
-            copyfile(file2,file1)
-            dic1[doc].insert(0,result)
+            # If the file has been remade but now is deleted            
+            if len(dic1[doc]) > 2 and dic1[doc][2][1] == 'deleted':
+                os.remove(file2)
+                updateSyncToDelete(dic2[doc])
+            else:
+                result = getFileData(file2)
+                copyfile(file2,file1)
+                dic1[doc].insert(0,result)
         else:
             os.remove(file2)
             updateSyncToDelete(dic2[doc])
@@ -197,8 +204,9 @@ def syncDirectories(dir1,dir2):
     #Write the changed results to .sync files
     dir1.saveSync(data1)
     dir2.saveSync(data2)
-            
-#This functions does some dirty work.
+
+##################################################################################            
+# Syncs sub directories 
 def mergeSubDirectories(dir1,dir2):
     
     #Start with dir1
