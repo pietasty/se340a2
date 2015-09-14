@@ -28,7 +28,7 @@ class Directory:
     #Saves the sync file
     def saveSync(self,data):
         with open(self.sync,'w') as f:
-            json.dump(data,f)
+            json.dump(data,f,sort_keys=True,indent=2)
 
     #Makes a Sync file when it doesn't exist 
     def makeSyncFile(self,sync,folder):
