@@ -2,6 +2,7 @@
 import sys
 import os
 import json
+from datetime import datetime, timedelta, timezone
 import time
 import hashlib
 from shutil import copyfile
@@ -87,7 +88,7 @@ class Directory:
 # Return a tuple of modification date and digest of a file
 def getFileData(file):
     hashing = hashlib.sha256()
-    edittime = time.localtime(os.path.getmtime(file))
+    edittime = datetime.fromtimestamp(os.path.getmtime(file)).replace(tzinfo =gettimezone())
     formattime = timeToStr(edittime)
     with open(file,'rb') as output:
         buf = output.read()
@@ -97,18 +98,27 @@ def getFileData(file):
 ################################################################################
 # Updates syns file to delete
 def updateSyncToDelete(syncinfo):
-    formattime = timeToStr(time.localtime())
+    formattime = timeToStr(datetime.now(gettimezone()))
     syncinfo.insert(0,(formattime,'deleted'))
 
 ###############################################################################
 # Converts time into a string
 def timeToStr(t):
-    return time.strftime("%Y-%m-%d %H:%M:%S +1200", t)
+    return t.strftime("%Y-%m-%d %H:%M:%S %z")
 
 ###############################################################################
 # Converts string into a time object
 def strToTime(s):
-    return time.strptime(s, "%Y-%m-%d %H:%M:%S +1200")
+    return datetime.strptime(s, "%Y-%m-%d %H:%M:%S %z")
+
+##############################################################################
+# Method that returns the timezone
+def gettimezone():
+    t = time.timezone * -1
+    delta = timedelta(seconds= t)
+    tz = timezone(delta)
+    return tz
+
 
 ##############################################################################
 #Function that syncs the two directories
@@ -238,23 +248,28 @@ def mergeSubDirectories(dir1,dir2):
         fold2 = os.path.join(dir2.path,dirs)
         if dirs not in dir1.subDirs:
             copy_tree(fold2,fold1)    
-    
+
+
+
 #Main
 if __name__ == "__main__":
-    #Find them directories baby.
-    dir1 = Directory(sys.argv[1])
-    dir2 = Directory(sys.argv[2])
+    if not os.path.isdir(sys.argv[1]) and not os.path.isdir(sys.argv[2]):
+        print("Both Directories do not exist!")
+    else:
+        #Find them directories baby.
+        dir1 = Directory(sys.argv[1])
+        dir2 = Directory(sys.argv[2])
 
-    #Update sync files
-    dir1.updateSyncFile()
-    dir2.updateSyncFile()
+        #Update sync files
+        dir1.updateSyncFile()
+        dir2.updateSyncFile()
 
-    #Update sub directories
-    dir1.updateSubDirectories()
-    dir2.updateSubDirectories()
+        #Update sub directories
+        dir1.updateSubDirectories()
+        dir2.updateSubDirectories()
 
-    #Time to Sync some shit baby
-    syncDirectories(dir1,dir2)
-    
-    #Sync them sub directories
-    mergeSubDirectories(dir1,dir2)
+        #Time to Sync some shit baby
+        syncDirectories(dir1,dir2)
+        
+        #Sync them sub directories
+        mergeSubDirectories(dir1,dir2)
