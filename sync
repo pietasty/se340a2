@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
+
+#Yubo Wu, 6412428, ywu591
+
 import sys
 import os
 import json
-from datetime import datetime, timedelta, timezone
+#from datetime import datetime, timedelta, timezone
 import time
 import hashlib
-from shutil import copyfile
+from shutil import copy2
 from distutils.dir_util import copy_tree
-
 
 class Directory:
     def __init__(self,path):
@@ -82,13 +84,11 @@ class Directory:
             subDir.updateSyncFile()
             subDir.updateSubDirectories()
 
-
-
 #################################################################################
 # Return a tuple of modification date and digest of a file
 def getFileData(file):
     hashing = hashlib.sha256()
-    edittime = datetime.fromtimestamp(os.path.getmtime(file)).replace(tzinfo =gettimezone())
+    edittime = time.localtime(os.path.getmtime(file))
     formattime = timeToStr(edittime)
     with open(file,'rb') as output:
         buf = output.read()
@@ -98,26 +98,18 @@ def getFileData(file):
 ################################################################################
 # Updates syns file to delete
 def updateSyncToDelete(syncinfo):
-    formattime = timeToStr(datetime.now(gettimezone()))
+    formattime = timeToStr(time.localtime())
     syncinfo.insert(0,(formattime,'deleted'))
 
 ###############################################################################
 # Converts time into a string
 def timeToStr(t):
-    return t.strftime("%Y-%m-%d %H:%M:%S %z")
+    return time.strftime("%Y-%m-%d %H:%M:%S %z",t)
 
 ###############################################################################
 # Converts string into a time object
 def strToTime(s):
-    return datetime.strptime(s, "%Y-%m-%d %H:%M:%S %z")
-
-##############################################################################
-# Method that returns the timezone
-def gettimezone():
-    t = time.timezone * -1
-    delta = timedelta(seconds= t)
-    tz = timezone(delta)
-    return tz
+    return time.strptime(s, "%Y-%m-%d %H:%M:%S %z")
 
 
 ##############################################################################
@@ -144,7 +136,7 @@ def syncDirectories(dir1,dir2):
                 updateSyncToDelete(dic2[doc])
             else:
                 result = getFileData(file2)
-                copyfile(file2,file1)
+                copy2(file2,file1)
                 dic1[doc].insert(0,result)
         else:
             os.remove(file2)
@@ -166,7 +158,7 @@ def syncDirectories(dir1,dir2):
             result1 = getFileData(f1)
             data2[doc] = []
             data2[doc].append(result1)
-            copyfile(f1,f2)
+            copy2(f1,f2)
             continue
 
         #When both dir has deleted
@@ -197,19 +189,19 @@ def syncDirectories(dir1,dir2):
                 #If file in dir1 is superseded
                 if checkIfSuperseded(data2[doc],data1[doc]):
                     data2[doc].insert(0,result1)
-                    copyfile(f1,f2)
+                    copy2(f1,f2)
                 #If file in dir2 is superseded
                 elif checkIfSuperseded(data1[doc],data2[doc]):
                     data1[doc].insert(0,result2)
-                    copyfile(f2,f1)
+                    copy2(f2,f1)
                 #Both versions are gg
                 else:
                     if onetime > twotime:
                         data2[doc].insert(0,result1)
-                        copyfile(f1,f2)
+                        copy2(f1,f2)
                     elif twotime > onetime:
                         data1[doc].insert(0,result2)
-                        copyfile(f2,f1)
+                        copy2(f2,f1)
 
     #If Dir2 has a file Dir1 doesn't have
     for doc in data2.keys():
@@ -219,7 +211,7 @@ def syncDirectories(dir1,dir2):
             data1[doc] = []
             data1[doc].append(result)
             newloc = os.path.join(dir1.path,doc)
-            copyfile(f,newloc)
+            copy2(f,newloc)
     
     #Write the changed results to .sync files
     dir1.saveSync(data1)
@@ -228,7 +220,6 @@ def syncDirectories(dir1,dir2):
 ##################################################################################            
 # Syncs sub directories 
 def mergeSubDirectories(dir1,dir2):
-    
     #Start with dir1
     for dirs in dir1.subDirs:
         fold1 = os.path.join(dir1.path,dirs)
@@ -248,8 +239,6 @@ def mergeSubDirectories(dir1,dir2):
         fold2 = os.path.join(dir2.path,dirs)
         if dirs not in dir1.subDirs:
             copy_tree(fold2,fold1)    
-
-
 
 #Main
 if __name__ == "__main__":

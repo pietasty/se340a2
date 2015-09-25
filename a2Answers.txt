@@ -1,0 +1,24 @@
+Yubo Wu, 6412428, ywu591
+
+To set up the sync file, command:
+chmod +x sync
+
+Questions:
+1) This implementation could be quite slow when it comes to dealing with a large amount of files.
+This is due to the fact that we have to read every single file one by one to figure out it's digest. 
+This will have to be done with both folders so it will be very slow when both folders contains a lot of files. 
+Also the sync part will make it slow as we have to check if a file exists in both directory and that means for each file in dir1 we may have to check every file in dir2.
+Finally the .sync file will be very large and reading it could be slow and it will produce a very large dictionary object in which we will have to iterate through in our code.
+
+2)
+One of the assumptions was that was that the path names sent to the sync program will be independent so infinite recursion will not occur.
+This assumption can be fixed in our code if we add a check that compares the paths of the two directories.
+This check can be done by getting the full file path of each diectory and check if one of the paths is contained in the other path.
+If that is the case then we can throw an error at the user saying that we cannot sync these folders as the program will never end.
+
+The Second assumption was that if two files have the same signature, they are the same version.
+This can be fixed if we add a version id which, uniquely identifies a file, to the file system.
+So if a file is changed, the version id will change and when do a comparsion with another file, we can just compare the version id of the two files.
+If they are different then they are not the same version. 
+When we do a copy of the file we also copy over the version id so when we do a comparsion of the two files without any edits, 
+the version id will be the same and thus the files will be the same version.
