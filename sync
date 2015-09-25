@@ -188,7 +188,7 @@ def syncDirectories(dir1,dir2):
             twotime = strToTime(data2[doc][0][0])
             #If digest is the same 
             if data1[doc][0][1] == data2[doc][0][1]:
-                if onetime > twotime:
+                if onetime < twotime:
                     data2[doc][0][0] = timeToStr(onetime)
                 elif twotime > onetime:
                     data1[doc][0][0] = timeToStr(twotime)
@@ -253,8 +253,10 @@ def mergeSubDirectories(dir1,dir2):
 
 #Main
 if __name__ == "__main__":
-    if not os.path.isdir(sys.argv[1]) and not os.path.isdir(sys.argv[2]):
-        print("Both Directories do not exist!")
+    if not len(sys.argv) == 3:
+        print("Usage: sync directory1 directory2")
+    elif not os.path.isdir(sys.argv[1]) and not os.path.isdir(sys.argv[2]):
+        print("Usage: sync directory1 directory2")
     else:
         #Find them directories baby.
         dir1 = Directory(sys.argv[1])
